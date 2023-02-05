@@ -42,10 +42,7 @@ logger.addHandler(log_handler)
 def check_tokens():
     """Проверка наличия всех токенов в переменных окружения."""
     tokens = ['TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID', 'PRACTICUM_TOKEN']
-    errors = []
-    for token in tokens:
-        if globals()[token] is None:
-            errors.append(token)
+    errors = [token for token in tokens if not globals()[token]]
     if errors:
         logger.critical('Не хватает токена в переменных окружения.')
         sys.exit('Не хватает токена в переменных окружения')
@@ -61,10 +58,10 @@ def send_message(bot: telegram.Bot, message: str) -> None:
     logger.debug(f'Бот отправил сообщение: {message}')
 
 
-def get_api_answer(old_timestamp: int) -> dict:
+def get_api_answer(current_timestamp: int) -> dict:
     """Делает запрос к единственному эндпоинту API-сервиса."""
     logger.info('Начало обращения к API')
-    payload = {'from_date': old_timestamp}
+    payload = {'from_date': current_timestamp}
     try:
         response = requests.get(
             ENDPOINT, headers=HEADERS, params=payload,
@@ -74,9 +71,9 @@ def get_api_answer(old_timestamp: int) -> dict:
     if response.status_code != HTTPStatus.OK:
         raise exceptions.APIResponseStatusCodeException(
             f'Эндпоинт недоступен: '
-            f'{ENDPOINT}, '
-            f'{payload}, '
-            f'{response.status_code}'
+            f'адрес - {ENDPOINT}, '
+            f'текущая дата - {payload}, '
+            f'статус ответа - {response.status_code}'
         )
     logger.info('Ответ получен')
     return response.json()
@@ -84,6 +81,7 @@ def get_api_answer(old_timestamp: int) -> dict:
 
 def check_response(response: dict) -> None:
     """Проверяет ответ API на соответствие документации."""
+    logger.info('Начало проверки ответа API')
     if not isinstance(response, dict):
         raise TypeError('Ответ не в виде словаря')
     if 'homeworks' not in response:
@@ -92,6 +90,7 @@ def check_response(response: dict) -> None:
         raise KeyError('В ответе нету ключа "current_date')
     if not isinstance(response.get('homeworks'), list):
         raise TypeError('Значение в homeworks не является списком')
+    logger.info('Проверка ответа API завершена')
 
 
 def parse_status(homework: dict) -> str:
@@ -101,10 +100,11 @@ def parse_status(homework: dict) -> str:
         raise KeyError('Ключ homework_name отсутствует')
     if 'status' not in homework:
         raise KeyError('Ключ status отсутствует')
-    homework_name = homework.get('homework_name')
-    homework_status = homework.get('status')
+    homework_name = homework['homework_name']
+    homework_status = homework['status']
     if homework_status not in HOMEWORK_VERDICTS:
-        raise ValueError('Непредусмотренное значенине для ключа "status"')
+        raise ValueError(f'Непредусмотренное значение -{homework_status}'
+                         f'для ключа "status"')
     verdict = HOMEWORK_VERDICTS[homework_status]
     logger.info('Статус извлечен')
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
@@ -138,6 +138,7 @@ def main():
             logger.error(message)
         finally:
             logger.debug('Итерация завершена')
+            current_timestamp = int(time.time())
             time.sleep(RETRY_PERIOD)
 
 
