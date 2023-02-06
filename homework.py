@@ -130,6 +130,8 @@ def main():
             if hw_status != last_message:
                 send_message(bot, hw_status)
                 last_message = hw_status
+            current_timestamp = (response.get('current_date')
+                                 or int(time.time()))
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             if last_message != message:
@@ -138,7 +140,6 @@ def main():
             logger.error(message)
         finally:
             logger.debug('Итерация завершена')
-            current_timestamp = int(time.time())
             time.sleep(RETRY_PERIOD)
 
 
